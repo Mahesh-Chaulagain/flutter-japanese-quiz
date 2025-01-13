@@ -1,0 +1,200 @@
+// main.dart
+import 'package:flutter/material.dart';
+import 'package:Nihongo_kuizu/questions_list.dart';
+import './quiz.dart';
+import './result.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<StatefulWidget> createState() {
+    return _MyAppState();
+  }
+}
+
+class _MyAppState extends State<MyApp> {
+  final _questions = QuestionsList().questionList;
+  var _questionIndex = 0;
+  var _totalScore = 0;
+  late List<Map<String, Object>> _shuffledQuestions;
+
+  bool _isAnswerSelected = false;
+  int _selectedAnswerIndex = -1;  // -1 means no answer selected
+
+  @override
+  void initState() {
+    super.initState();
+    _shuffledQuestions = List.from(_questions);
+    _shuffledQuestions.shuffle();
+  }
+
+  void _answerQuestion(int score, int selectedAnswerIndex) {
+    setState(() {
+      _isAnswerSelected = true;
+      _selectedAnswerIndex = selectedAnswerIndex;
+      _totalScore += score;
+    });
+  }
+
+  void _nextQuestion() {
+    setState(() {
+      _isAnswerSelected = false;
+      _selectedAnswerIndex = -1;  // Reset selection for the next question
+      _questionIndex++;
+    });
+  }
+
+  void reset() {
+    setState(() {
+      _totalScore = 0;
+      _questionIndex = 0;
+      _isAnswerSelected = false;
+      _selectedAnswerIndex = -1;
+      _shuffledQuestions.shuffle();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Japanese Quiz App'),
+        ),
+        body: (_questionIndex < _shuffledQuestions.length)
+            ? Quiz(
+                answerQuestion: _answerQuestion,
+                nextQuestion: _nextQuestion,
+                questionIndex: _questionIndex,
+                questions: _shuffledQuestions,
+                score: _totalScore,
+                isAnswerSelected: _isAnswerSelected,
+                selectedAnswerIndex: _selectedAnswerIndex,
+              )
+            : Result(
+                _totalScore,
+                reset,
+              ),
+      ),
+    );
+  }
+}
+
+// quiz.dart
+import 'package:flutter/material.dart';
+import './answer.dart';
+
+class Quiz extends StatelessWidget {
+  final List<Map<String, Object>> questions;
+  final int questionIndex;
+  final VoidCallback nextQuestion;
+  final Function(int, int) answerQuestion; // Now it takes score and selected index
+  final int score;
+  final bool isAnswerSelected;
+  final int selectedAnswerIndex;
+
+  const Quiz({
+    required this.questions,
+    required this.questionIndex,
+    required this.answerQuestion,
+    required this.nextQuestion,
+    required this.score,
+    required this.isAnswerSelected,
+    required this.selectedAnswerIndex,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final question = questions[questionIndex];
+    final answers = (question['answers'] as List<Map<String, Object>>);
+    int correctAnswerIndex = answers.indexWhere((answer) => answer['score'] == 1);
+
+    return Column(
+      children: [
+        Text(
+          question['questionText'] as String,
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+        ),
+        ...answers.map((answer) {
+          int answerIndex = answers.indexOf(answer);
+
+          return Answer(
+            () {
+              if (!isAnswerSelected) {
+                answerQuestion(answer['score'] as int, answerIndex);
+              }
+            },
+            answer['text'] as String,
+            answer['score'] as int,
+            isAnswerSelected: isAnswerSelected,
+            isCorrectAnswer: correctAnswerIndex == answerIndex,
+            isSelectedAnswer: selectedAnswerIndex == answerIndex,
+          );
+        }).toList(),
+        if (isAnswerSelected)
+          ElevatedButton(
+            onPressed: nextQuestion,
+            child: const Text('Next Question'),
+          ),
+      ],
+    );
+  }
+}
+
+// answer.dart
+import 'package:flutter/material.dart';
+
+class Answer extends StatelessWidget {
+  final VoidCallback selectHandler;
+  final String answerText;
+  final int score;
+  final bool isAnswerSelected; // Whether the answer is selected
+  final bool isCorrectAnswer; // Whether this answer is the correct one
+  final bool isSelectedAnswer; // Whether this is the selected answer
+
+  const Answer(
+    this.selectHandler,
+    this.answerText,
+    this.score, {
+    super.key,
+    required this.isAnswerSelected,
+    required this.isCorrectAnswer,
+    required this.isSelectedAnswer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(5),
+          child: ElevatedButton(
+            onPressed: isAnswerSelected ? null : selectHandler, // Disable button after selecting
+            style: ButtonStyle(
+              backgroundColor: MaterialStateProperty.all(
+                isAnswerSelected
+                    ? (isCorrectAnswer ? Colors.green : (isSelectedAnswer ? Colors.red : Colors.blue))
+                    : Colors.blue,
+              ),
+              foregroundColor: MaterialStateProperty.all(Colors.white),
+            ),
+            child: Text(answerText),
+          ),
+        ),
+        if (isAnswerSelected)
+          Icon(
+            score == 1 ? Icons.check : Icons.close,
+            color: score == 1 ? Colors.green : Colors.red,
+          ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
